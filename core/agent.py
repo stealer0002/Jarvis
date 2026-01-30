@@ -9,7 +9,7 @@ from core.ollama_client import OllamaClient
 from core.tools import registry
 import config
 
-from tools import mouse_keyboard, screen, processes, filesystem, commands, web, calculator, apps, apis
+from tools import mouse_keyboard, screen, processes, filesystem, commands, web, calculator, apps, apis, vision, documents, coding
 
 
 SYSTEM_PROMPT = f"""Você é o {config.AGENT_NAME}, um assistente de IA inteligente, amigável e capaz.
