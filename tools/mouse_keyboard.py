@@ -302,7 +302,23 @@ def open_and_type(program: str, text: str, wait_seconds: float = 2, press_enter:
             return True
         
         EnumWindowsProc = ctypes.WINFUNCTYPE(ctypes.c_bool, wintypes.HWND, wintypes.LPARAM)
-        user32.EnumWindows(EnumWindowsProc(enum_callback), 0)
+        
+        # Retry loop to find window (max 15 attempts / ~7.5 seconds)
+        for _ in range(15):
+            try:
+                found_hwnd = None
+                best_hwnd = None
+                user32.EnumWindows(EnumWindowsProc(enum_callback), 0)
+                
+                if not found_hwnd:
+                    found_hwnd = best_hwnd
+                
+                if found_hwnd:
+                    break
+            except:
+                pass
+                
+            time.sleep(0.5)
         
         # Use PID match if found, otherwise use title match
         if not found_hwnd:
