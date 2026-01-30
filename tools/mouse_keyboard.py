@@ -308,15 +308,40 @@ def open_and_type(program: str, text: str, wait_seconds: float = 2, press_enter:
         if not found_hwnd:
             found_hwnd = best_hwnd
         
+        # Force window activation with AttachThreadInput trick
+        def force_focus_window(hwnd):
+            """More aggressive window activation that bypasses Windows focus stealing prevention."""
+            try:
+                # Get foreground window's thread
+                foreground = user32.GetForegroundWindow()
+                foreground_thread = user32.GetWindowThreadProcessId(foreground, None)
+                target_thread = user32.GetWindowThreadProcessId(hwnd, None)
+                
+                # Attach threads to allow focus change
+                if foreground_thread != target_thread:
+                    user32.AttachThreadInput(foreground_thread, target_thread, True)
+                
+                # Show and activate window
+                user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+                user32.BringWindowToTop(hwnd)
+                user32.SetForegroundWindow(hwnd)
+                user32.SetFocus(hwnd)
+                
+                # Detach threads
+                if foreground_thread != target_thread:
+                    user32.AttachThreadInput(foreground_thread, target_thread, False)
+                
+                return True
+            except:
+                return False
+        
         if found_hwnd:
-            # Bring window to foreground
-            user32.ShowWindow(found_hwnd, 9)  # SW_RESTORE
-            user32.SetForegroundWindow(found_hwnd)
-            time.sleep(0.3)  # Wait for focus
+            force_focus_window(found_hwnd)
+            time.sleep(0.5)  # Longer wait for focus
         else:
             # Fallback: use Alt+Tab to switch to last window
             pyautogui.hotkey('alt', 'tab')
-            time.sleep(0.3)
+            time.sleep(0.5)
         
         # Special handling for browsers - need to focus address bar or open new tab
         is_browser = program_lower in ["chrome", "firefox", "edge", "brave", "opera"]
