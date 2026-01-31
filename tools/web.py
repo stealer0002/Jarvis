@@ -7,6 +7,26 @@ import re
 from core.tools import tool
 
 
+# ============ CONTENT POLICY FILTER ============
+BLOCKED_KEYWORDS = [
+    # Pornography (explicit)
+    "porn", "xxx", "xvideos", "pornhub", "xnxx", "xhamster", "redtube",
+    "onlyfans", "fansly", "hentai", "rule34", "nhentai", "hanime",
+    # Child exploitation (ZERO TOLERANCE)
+    "cp ", "pthc", "child porn", "loli", "shota", "underage",
+]
+
+def _is_query_blocked(query: str) -> tuple[bool, str]:
+    """Check if query contains blocked content."""
+    query_lower = query.lower()
+    for keyword in BLOCKED_KEYWORDS:
+        if keyword in query_lower:
+            if any(term in query_lower for term in ["child", "cp ", "pthc", "loli", "shota", "underage"]):
+                return True, "🚨 BLOQUEADO: Isso é crime. Não vou ajudar e sugiro que você repense suas escolhas."
+            return True, "🚫 BLOQUEADO: Conteúdo adulto não é permitido. Posso ajudar com outra coisa?"
+    return False, ""
+
+
 @tool(
     name="web_search",
     description="Pesquisa na web usando DuckDuckGo. Use para buscar informações, notícias, tutoriais, etc.",
@@ -33,6 +53,13 @@ from core.tools import tool
 def web_search(query: str, max_results: int = 5, time_limit: str = None) -> dict:
     """Search the web using DuckDuckGo with retry, caching and time filter."""
     import time
+    
+    # Content policy check
+    is_blocked, message = _is_query_blocked(query)
+    if is_blocked:
+        return {"success": False, "blocked": True, "message": message}
+    
+    # Global cache for the session (simple in-memory)
     
     # Global cache for the session (simple in-memory)
     if not hasattr(web_search, "cache"):
