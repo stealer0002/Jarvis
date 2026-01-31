@@ -42,6 +42,9 @@ class OllamaClient:
             "model": model or self.model,
             "messages": messages,
             "stream": stream,
+            "options": {
+                "num_ctx": 8192  # Increased context for longer documents (PDFs, etc.)
+            }
         }
         
         if tools:

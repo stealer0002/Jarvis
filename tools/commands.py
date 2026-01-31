@@ -5,12 +5,60 @@ For running shell commands and scripts
 
 import subprocess
 import os
+import re
 from core.tools import tool
+
+
+# ============ SECURITY GUARDRAILS ============
+# Commands that should NEVER be executed
+COMMAND_BLACKLIST = [
+    # Destructive file operations
+    r"format\s+[a-z]:",         # format C:
+    r"del\s+/[sfq]",            # del /s /f /q
+    r"rm\s+-rf",                # rm -rf
+    r"rmdir\s+/[sq]",           # rmdir /s /q
+    r"rd\s+/[sq]",              # rd /s /q
+    
+    # System critical
+    r"shutdown",                # shutdown
+    r"restart",                 # restart
+    r"reg\s+delete",            # reg delete
+    r"bcdedit",                 # boot config
+    r"diskpart",                # disk partitioning
+    
+    # Network dangerous
+    r"netsh\s+.*reset",         # network reset
+    r"arp\s+-d",                # clear ARP cache
+    
+    # PowerShell dangerous
+    r"Remove-Item\s+.*-Recurse.*-Force",
+    r"Stop-Computer",
+    r"Restart-Computer",
+]
+
+# Directories where file operations are safe
+SAFE_DIRECTORIES = [
+    os.path.expanduser("~\\Desktop"),
+    os.path.expanduser("~\\Documents"),
+    os.path.expanduser("~\\Downloads"),
+    os.path.dirname(os.path.dirname(__file__)),  # Project folder
+]
+
+
+def _is_command_safe(command: str) -> tuple[bool, str]:
+    """Check if command is safe to execute."""
+    command_lower = command.lower()
+    
+    for pattern in COMMAND_BLACKLIST:
+        if re.search(pattern, command_lower, re.IGNORECASE):
+            return False, f"Comando bloqueado por segurança: padrão '{pattern}' detectado."
+    
+    return True, ""
 
 
 @tool(
     name="run_command",
-    description="Executa um comando no terminal/shell. Use para comandos como 'dir', 'ipconfig', 'pip install', etc.",
+    description="Executa um comando no terminal/shell. Use para comandos como 'dir', 'ipconfig', 'pip install', etc. Comandos destrutivos são bloqueados automaticamente.",
     parameters={
         "type": "object",
         "properties": {
@@ -31,7 +79,18 @@ from core.tools import tool
     }
 )
 def run_command(command: str, cwd: str = None, timeout: int = 60) -> dict:
-    """Execute a shell command."""
+    """Execute a shell command with safety checks."""
+    
+    # Security check
+    is_safe, reason = _is_command_safe(command)
+    if not is_safe:
+        return {
+            "success": False,
+            "blocked": True,
+            "error": reason,
+            "hint": "Use comandos mais seguros ou peça ao usuário para executar manualmente."
+        }
+    
     try:
         result = subprocess.run(
             command,

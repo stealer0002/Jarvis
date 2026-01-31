@@ -9,7 +9,7 @@ from core.ollama_client import OllamaClient
 from core.tools import registry
 import config
 
-from tools import mouse_keyboard, screen, processes, filesystem, commands, web, calculator, apps, apis, vision, documents, coding
+from tools import mouse_keyboard, screen, processes, filesystem, commands, web, calculator, apps, apis, vision, documents, coding, memory
 
 
 SYSTEM_PROMPT = f"""Você é o {config.AGENT_NAME}, um assistente de IA inteligente, amigável e capaz.
@@ -36,6 +36,7 @@ SYSTEM_PROMPT = f"""Você é o {config.AGENT_NAME}, um assistente de IA intelige
 - **OCR**: Use `read_screen_text` para ler texto simples (menus, erros).
 - **Visão IA**: Use `analyze_screen` para descrever o que está na tela, identificar botões, cores, layouts complexos ou quando o OCR falhar. (Ex: "Onde está o botão verde?", "Descreva a imagem").
 - **Documentos**: Use `read_pdf` para ler PDFs, `read_text_file` para arquivos de texto.
+- **Memória**: Use `remember_fact` para salvar preferências do usuário (ex: navegador favorito). Use `recall_memory` para buscar informações salvas.
 
 ## REGRAS CRÍTICAS
 1. **AÇÃO COMPLETA**: Quando o usuário pede uma tarefa multi-passo (ex: "abra X e faça Y"), COMPLETE A TAREFA INTEIRA antes de responder. Use `open_and_type` que já abre E digita em um único passo.
@@ -54,6 +55,8 @@ SYSTEM_PROMPT = f"""Você é o {config.AGENT_NAME}, um assistente de IA intelige
 14. **NOTÍCIAS**: Para "notícias de hoje", USE `deep_news_search`.
 15. **LEITURA PROFUNDA**: Se snippets forem vagos, USE `fetch_webpage` para ler o conteúdo completo.
 16. **PROGRAMAS**: Para instalar/desinstalar, USE `manage_apps`. Primeiro pesquise o ID, depois execute.
+17. **MEMÓRIA**: Quando o usuário mencionar preferências (navegador, editor, pasta de projeto), USE `remember_fact` para salvar. Antes de agir em preferências, USE `recall_memory` para verificar se há algo salvo.
+18. **VERIFICAÇÃO PÓS-AÇÃO**: Após `mouse_click` ou `open_and_type`, considere usar `analyze_screen` para confirmar se a ação funcionou. Se aparecer um erro ou diálogo inesperado, reaja adequadamente.
 
 ## CONTEXTO
 Você tem acesso total ao PC. Use esse poder com responsabilidade.
