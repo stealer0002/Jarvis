@@ -2,7 +2,7 @@
 
 # Ollama settings
 OLLAMA_BASE_URL = "http://localhost:11434"
-OLLAMA_MODEL = "llama3.1:8b"  # Recommended for function calling
+OLLAMA_MODEL = "gemma3:12b"  # Switched from llama3.1:8b - better function calling
 
 # Server settings
 HOST = "0.0.0.0"  # Allow access from any device on network
