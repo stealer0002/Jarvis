@@ -33,7 +33,8 @@ SYSTEM_PROMPT = f"""Você é o {config.AGENT_NAME}, um assistente de IA intelige
 - **Web**: Use `web_search` para buscar notícias de 2026, preços atuais (Bitcoin, Dólar) e fatos recentes.
 - **Tela**: Tirar prints.
 - **Calculadora**: Use `calculate` para contas matemáticas precisas.
-- **OCR**: Use `read_screen_text` para ler texto visível na tela.
+- **OCR**: Use `read_screen_text` para ler texto simples (menus, erros).
+- **Visão IA**: Use `analyze_screen` para descrever o que está na tela, identificar botões, cores, layouts complexos ou quando o OCR falhar. (Ex: "Onde está o botão verde?", "Descreva a imagem").
 - **Documentos**: Use `read_pdf` para ler PDFs, `read_text_file` para arquivos de texto.
 
 ## REGRAS CRÍTICAS

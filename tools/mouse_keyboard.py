@@ -220,177 +220,171 @@ def type_into_application(text: str, use_clipboard: bool = True) -> dict:
         "required": ["program", "text"]
     }
 )
+@tool(
+    name="open_and_type",
+    description="Abre um programa, espera carregar, foca a janela e digita texto. Ideal para navegadores e pesquisas.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "program": {
+                "type": "string",
+                "description": "Nome do programa a abrir (notepad, chrome, word, etc.)"
+            },
+            "text": {
+                "type": "string",
+                "description": "Texto a ser digitado após abrir o programa"
+            },
+            "wait_seconds": {
+                "type": "number",
+                "description": "Segundos para esperar o programa abrir. Padrão: 2"
+            },
+            "press_enter": {
+                "type": "boolean",
+                "description": "Se True, pressiona Enter após digitar. Útil para pesquisas."
+            }
+        },
+        "required": ["program", "text"]
+    }
+)
 def open_and_type(program: str, text: str, wait_seconds: float = 2, press_enter: bool = False) -> dict:
-    """Open a program, wait for it to load, focus it, and type text into it."""
+    """Abre (ou foca se já aberto) um programa e digita texto. Usa PID real para foco."""
     try:
         import subprocess
         import time
-        import ctypes
-        from ctypes import wintypes
+        import pyperclip
+        import pyautogui
         
         # Import open_program logic
         from tools.processes import open_program as _open_program
+        from tools.program_search import find_executable
         
-        # Open the program
-        result = _open_program(program)
-        if not result.get("success"):
-            return result
-        
-        # Wait for program to open
-        time.sleep(wait_seconds)
-        
-        # Try to focus the window by searching for it
         program_lower = program.lower()
+        is_browser = program_lower in ["chrome", "firefox", "edge", "brave", "opera", "browser", "navegador"]
         
-        # Map common program names to window title patterns
-        # More specific window patterns - avoid conflicts
-        window_patterns = {
-            "notepad": ["Bloco de Notas", "Notepad", "Sem título - Bloco"],
-            "chrome": ["- Google Chrome"],  # More specific to avoid "Comet" conflicts
-            "firefox": ["Mozilla Firefox", "— Mozilla Firefox"],
-            "edge": ["- Microsoft Edge", "Microsoft Edge"],
-            "word": ["- Word", "- Microsoft Word"],
-            "excel": ["- Excel", "- Microsoft Excel"],
-            "vscode": ["- Visual Studio Code"],
-            "discord": ["- Discord"],
-            "spotify": ["Spotify"],
-            "whatsapp": ["WhatsApp"],
-            "telegram": ["Telegram"],
-            "comet": ["Comet"],
-        }
-        
-        # Get matching patterns for this program
-        patterns = window_patterns.get(program_lower, [program])
-        
-        # Use Windows API to find and focus window
-        user32 = ctypes.windll.user32
-        
-        # Get PID from the open_program result if available
-        target_pid = result.get("pid")
-        
-        # EnumWindows callback to find matching window
-        found_hwnd = None
-        best_hwnd = None
-        
-        def get_window_pid(hwnd):
-            pid = wintypes.DWORD()
-            user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
-            return pid.value
-        
-        def enum_callback(hwnd, lparam):
-            nonlocal found_hwnd, best_hwnd
-            if user32.IsWindowVisible(hwnd):
-                length = user32.GetWindowTextLengthW(hwnd) + 1
-                buffer = ctypes.create_unicode_buffer(length)
-                user32.GetWindowTextW(hwnd, buffer, length)
-                title = buffer.value
-                title_lower = title.lower()
-                
-                # First priority: match by PID
-                if target_pid:
-                    window_pid = get_window_pid(hwnd)
-                    if window_pid == target_pid:
-                        found_hwnd = hwnd
-                        return False  # Stop enumeration
-                
-                # Second priority: match by title pattern
-                for pattern in patterns:
-                    if pattern.lower() in title_lower:
-                        best_hwnd = hwnd
-                        # Don't stop - keep looking for exact PID match
-                
-            return True
-        
-        EnumWindowsProc = ctypes.WINFUNCTYPE(ctypes.c_bool, wintypes.HWND, wintypes.LPARAM)
-        
-        # Retry loop to find window (max 15 attempts / ~7.5 seconds)
-        for _ in range(15):
+        # Helper to activate window via PowerShell (Robust for UWP/W11)
+        # Matches by PID (int) or Title (str)
+        def activate_window(start_input):
+            cmd_arg = str(start_input)
+            if isinstance(start_input, str):
+                escaped = start_input.replace("'", "''")
+                cmd_arg = f"'{escaped}'"
+            
+            cmd = f"(New-Object -ComObject WScript.Shell).AppActivate({cmd_arg})"
             try:
-                found_hwnd = None
-                best_hwnd = None
-                user32.EnumWindows(EnumWindowsProc(enum_callback), 0)
-                
-                if not found_hwnd:
-                    found_hwnd = best_hwnd
-                
-                if found_hwnd:
-                    break
-            except:
-                pass
-                
-            time.sleep(0.5)
-        
-        # Use PID match if found, otherwise use title match
-        if not found_hwnd:
-            found_hwnd = best_hwnd
-        
-        # Force window activation with AttachThreadInput trick
-        def force_focus_window(hwnd):
-            """More aggressive window activation that bypasses Windows focus stealing prevention."""
-            try:
-                # Get foreground window's thread
-                foreground = user32.GetForegroundWindow()
-                foreground_thread = user32.GetWindowThreadProcessId(foreground, None)
-                target_thread = user32.GetWindowThreadProcessId(hwnd, None)
-                
-                # Attach threads to allow focus change
-                if foreground_thread != target_thread:
-                    user32.AttachThreadInput(foreground_thread, target_thread, True)
-                
-                # Show and activate window
-                user32.ShowWindow(hwnd, 9)  # SW_RESTORE
-                user32.BringWindowToTop(hwnd)
-                user32.SetForegroundWindow(hwnd)
-                user32.SetFocus(hwnd)
-                
-                # Detach threads
-                if foreground_thread != target_thread:
-                    user32.AttachThreadInput(foreground_thread, target_thread, False)
-                
-                return True
-            except:
+                res = subprocess.run(
+                    ["powershell", "-c", cmd], 
+                    capture_output=True, 
+                    text=True,
+                    check=False
+                )
+                return "True" in (res.stdout or "")
+            except Exception:
                 return False
-        
-        if found_hwnd:
-            force_focus_window(found_hwnd)
-            time.sleep(0.5)  # Longer wait for focus
-        else:
-            # Fallback: use Alt+Tab to switch to last window
-            pyautogui.hotkey('alt', 'tab')
-            time.sleep(0.5)
-        
-        # Special handling for browsers - need to focus address bar or open new tab
-        is_browser = program_lower in ["chrome", "firefox", "edge", "brave", "opera"]
-        
-        if is_browser:
-            # Open new tab and focus address bar
-            pyautogui.hotkey('ctrl', 't')  # New tab
-            time.sleep(0.3)
-            pyautogui.hotkey('ctrl', 'l')  # Focus address bar
-            time.sleep(0.2)
-        
-        # Type text using clipboard method (best for special chars)
-        subprocess.run(
-            ["powershell", "-Command", f"Set-Clipboard -Value '{text.replace(chr(39), chr(39)+chr(39))}'"],
-            capture_output=True,
-            timeout=5
-        )
-        time.sleep(0.1)
-        pyautogui.hotkey('ctrl', 'v')
-        
-        # For browsers, always press Enter to navigate
-        if is_browser or press_enter:
-            time.sleep(0.1)
-            pyautogui.press('enter')
-        
-        preview = text[:50] + "..." if len(text) > 50 else text
-        return {
-            "success": True,
-            "program": program,
-            "text_typed": preview,
-            "enter_pressed": is_browser or press_enter,
-            "window_focused": found_hwnd is not None
+
+        # Helper to get REAL PID of a process name (Handles Shim Launchers)
+        # Returns the PID of the most recently started instance
+        def get_real_pid(proc_name):
+            try:
+                cmd = f"Get-Process -Name {proc_name} -ErrorAction SilentlyContinue | Sort-Object StartTime -Descending | Select-Object -First 1 -ExpandProperty Id"
+                res = subprocess.run(
+                    ["powershell", "-c", cmd],
+                    capture_output=True,
+                    text=True,
+                    check=False
+                )
+                if res.stdout and res.stdout.strip().isdigit():
+                    return int(res.stdout.strip())
+            except Exception:
+                pass
+            return None
+
+        # Map common aliases to actual Process Names for PID lookup
+        process_names = {
+            "notepad": "notepad",
+            "bloco de notas": "notepad",
+            "chrome": "chrome",
+            "google chrome": "chrome",
+            "firefox": "firefox",
+            "edge": "msedge",
+            "word": "winword",
+            "excel": "excel",
+            "calculator": "calc",
+            "calc": "calc",
+            "whatsapp": "whatsapp",
+            "spotify": "spotify",
+            "telegram": "telegram",
+            "discord": "discord",
         }
+        
+        # Determine process name
+        proc_name = process_names.get(program_lower)
+        if not proc_name:
+            # Try to guess or use program name
+             proc_name = program_lower.replace(" ", "")
+
+        # 1. Check if already running (Prevent Double Launch)
+        # But we need to activate it to be sure.
+        target_pid = get_real_pid(proc_name)
+        already_open = False
+        
+        if target_pid:
+            print(f"DEBUG: Found running process {proc_name} (PID {target_pid}). Activating...")
+            if activate_window(target_pid):
+                already_open = True
+        
+        # 2. Launch if not found
+        if not already_open:
+            print(f"DEBUG: Not found or failed to focus. Launching {program}...")
+            result = _open_program(program)
+            if not result.get("success"):
+                return result
+            
+            # Wait for load (Shim exits, real app starts)
+            time.sleep(wait_seconds)
+            
+            # 3. Find NEW PID
+            # The launch result PID might be the shim (dead).
+            # We scan for the newest instance again.
+            target_pid = get_real_pid(proc_name)
+            
+            if target_pid:
+                print(f"DEBUG: New process found (PID {target_pid}). Activating...")
+                activate_window(target_pid)
+                time.sleep(0.5)
+            else:
+                # Fallback: Try Title Patterns if PID lookup failed
+                pass # Already handled by AppActivate in 'else' logic below? 
+                # Actually, AppActivate accepts strings too.
+        
+        # 4. Browser Setup
+        if is_browser:
+            time.sleep(0.5)
+            pyautogui.hotkey('ctrl', 't')
+            time.sleep(0.5)
+            pyautogui.hotkey('ctrl', 'l')
+            time.sleep(0.2)
+
+        # 5. Type
+        try:
+            pyperclip.copy(text)
+            time.sleep(0.1)
+            pyautogui.hotkey('ctrl', 'v')
+            time.sleep(0.1)
+        except Exception:
+            pyautogui.write(text)
+
+        # 6. Enter
+        if is_browser or press_enter:
+            time.sleep(0.2)
+            pyautogui.press('enter')
+
+        return {
+            "success": True, 
+            "program": program, 
+            "text_typed": text[:50],
+            "window_focused": target_pid is not None
+        }
+
     except Exception as e:
         return {"success": False, "error": str(e)}
 

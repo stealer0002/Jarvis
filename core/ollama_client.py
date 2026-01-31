@@ -21,27 +21,36 @@ class OllamaClient:
         self,
         messages: list[dict],
         tools: Optional[list[dict]] = None,
-        stream: bool = False
+        images: Optional[list[str]] = None,
+        stream: bool = False,
+        model: Optional[str] = None
     ) -> dict:
         """
-        Send a chat request to Ollama with optional tool definitions.
+        Send a chat request to Ollama with optional tool definitions and images.
         
         Args:
             messages: List of message dicts with 'role' and 'content'
             tools: Optional list of tool definitions for function calling
+            images: Optional list of base64 encoded images (for vision models)
             stream: Whether to stream the response
+            model: Override default model (e.g. for using 'moondream')
             
         Returns:
             Response dict from Ollama
         """
         payload = {
-            "model": self.model,
+            "model": model or self.model,
             "messages": messages,
             "stream": stream,
         }
         
         if tools:
             payload["tools"] = tools
+        
+        # Add images to the last message if provided
+        # Ollama API expects 'images' field inside the message object
+        if images and messages:
+            messages[-1]["images"] = images
         
         try:
             response = await self.client.post(
